@@ -159,15 +159,19 @@ void readMPUdata()
   Wire.beginTransmission(mpu_address); // Start communicating with the MPU-6050
   Wire.write(0x3B); // Send the requested starting register
   Wire.endTransmission(); // End the transmission
-  Wire.requestFrom(mpu_address, 14); //Request 14 bytes from the MPU-6050
-  //Wire.requestFrom(mpu_address, 14, true); //Request 14 bytes from the MPU-6050
+  //Wire.requestFrom(mpu_address, 14); //Request 14 bytes from the MPU-6050
+  Wire.requestFrom(mpu_address, 14, true); //Request 14 bytes from the MPU-6050
   //while(Wire.available() < 14); // Wait until all the bytes are received ### ISSUE ON THIS LINE ###
   AccX = -(Wire.read() << 8 | Wire.read());
   AccY = -(Wire.read() << 8 | Wire.read());
+  //AccX = (Wire.read() << 8 | Wire.read());
+  //AccY = (Wire.read() << 8 | Wire.read());
   AccZ = (Wire.read() << 8 | Wire.read());
   temperature = Wire.read() << 8 | Wire.read();
   GyroX = -(Wire.read() << 8 | Wire.read());
   GyroY = -(Wire.read() << 8 | Wire.read());
+  //GyroX = (Wire.read() << 8 | Wire.read());
+  //GyroY = (Wire.read() << 8 | Wire.read());
   GyroZ = (Wire.read() << 8 | Wire.read());
 }
 
@@ -267,7 +271,27 @@ void getPIDoutput() // Get PID output
 
 void setup()
 {
-  //Serial.begin(57600);
+  //Serial.begin(57600); // For debugging
+  //Wire.begin(); // Start the I2C as master
+  //Wire.setClock(400000);
+
+  // Define pin modes for esc's
+  /*
+  pinMode(bm1_PIN, OUTPUT);
+  pinMode(bm2_PIN, OUTPUT);
+  pinMode(bm3_PIN, OUTPUT);
+  pinMode(bm4_PIN, OUTPUT);
+  */
+  // Define pin modes for mpu
+  // Try this!
+  //pinMode(A4, INPUT_PULLUP);
+  //pinMode(A5, INPUT_PULLUP);
+  //digitalWrite(A4,LOW);
+  //digitalWrite(A5,LOW);
+
+  //Set I2C clock speed to 400kHz
+  //Wire.begin();
+  //Wire.setClock(10000);
 
   // Define radio communication
   radio.begin();
@@ -296,7 +320,6 @@ void loop()
 {
   // Step 1: Get MPU data
   getRollPitch();
-  //readMPUdata();
   
   gyro_roll_input = (gyro_roll_input * 0.7) + ((GyroX / 65.5) * 0.3); // 65.5 = 1 deg/s
   gyro_pitch_input = (gyro_pitch_input * 0.7) + ((GyroY / 65.5) * 0.3); // 65.5 = 1 deg/s
@@ -386,6 +409,8 @@ void loop()
     bm2 = throttle + roll_output - pitch_output - yaw_output; // Calculate the pulse for bm2 (front-right - CCW)
     bm3 = throttle - roll_output + pitch_output - yaw_output; // Calculate the pulse for bm3 (rear-left - CCW)
     bm4 = throttle + roll_output + pitch_output + yaw_output; // Calculate the pulse for bm4 (rear-right - CW)
+    /*
+    // Can neglect this part of the code when using Servo library
     // Keep the motors running
     if (bm1 < 1000) bm1 = 1000;
     if (bm2 < 1000) bm2 = 1000;
@@ -396,12 +421,22 @@ void loop()
     if(bm2 > 2000) bm2 = 2000;
     if(bm3 > 2000) bm3 = 2000;
     if(bm4 > 2000) bm4 = 2000;
+    */
   }
 
   BM1.writeMicroseconds(bm1);
   BM2.writeMicroseconds(bm2);
   BM3.writeMicroseconds(bm3);
   BM4.writeMicroseconds(bm4);
+  /*
+  Serial.print(bm1);
+  Serial.print(", ");
+  Serial.print(bm2);
+  Serial.print(", ");
+  Serial.print(bm3);
+  Serial.print(", ");
+  Serial.println(bm4);
+  */
   
   while(micros() - loop_timer < 4000); // Wait until the loop_timer reaches 4000us (250Hz) before starting the next loop
   loop_timer = micros();
