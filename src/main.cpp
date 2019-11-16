@@ -159,19 +159,13 @@ void readMPUdata()
   Wire.beginTransmission(mpu_address); // Start communicating with the MPU-6050
   Wire.write(0x3B); // Send the requested starting register
   Wire.endTransmission(); // End the transmission
-  //Wire.requestFrom(mpu_address, 14); //Request 14 bytes from the MPU-6050
   Wire.requestFrom(mpu_address, 14, true); //Request 14 bytes from the MPU-6050
-  //while(Wire.available() < 14); // Wait until all the bytes are received ### ISSUE ON THIS LINE ###
   AccX = -(Wire.read() << 8 | Wire.read());
   AccY = -(Wire.read() << 8 | Wire.read());
-  //AccX = (Wire.read() << 8 | Wire.read());
-  //AccY = (Wire.read() << 8 | Wire.read());
   AccZ = (Wire.read() << 8 | Wire.read());
   temperature = Wire.read() << 8 | Wire.read();
   GyroX = -(Wire.read() << 8 | Wire.read());
   GyroY = -(Wire.read() << 8 | Wire.read());
-  //GyroX = (Wire.read() << 8 | Wire.read());
-  //GyroY = (Wire.read() << 8 | Wire.read());
   GyroZ = (Wire.read() << 8 | Wire.read());
 }
 
@@ -201,12 +195,19 @@ void getRollPitch()
   // Step 5: Accelerometer angle calculation
   // 57.296 = 180 / PI -> asin function uses radians
   total_vector_acc = sqrt((AccX * AccX) + (AccY * AccY) + (AccZ * AccZ)); // Calculate the total accelerometer vector
-  roll_angle_acc = asin((float)AccY / total_vector_acc) * -57.296;
-  pitch_angle_acc = asin((float)AccX / total_vector_acc) * 57.296;
+
+  if(abs(AccY) < total_vector_acc) // Prevent asin function producing a NaN
+  {
+    roll_angle_acc = asin((float)AccY/total_vector_acc) * -57.296;
+  }
+  if(abs(AccX) < total_vector_acc) // Prevent asin function producing a NaN
+  {
+    pitch_angle_acc = asin((float)AccX/total_vector_acc) * 57.296;
+  }
 
   // Step 6: Correct for roll_angle_acc and pitch_angle_acc offsets (found manually)
-  roll_angle_acc -= 4.17;
-  pitch_angle_acc -= 2.81;
+  roll_angle_acc -= 4.35;
+  pitch_angle_acc -= 2.73;
 
   // Step 7: Set roll and pitch angle depending on if IMU has already started or not
   if(imu_started) // If the IMU is already started
@@ -272,26 +273,7 @@ void getPIDoutput() // Get PID output
 void setup()
 {
   //Serial.begin(57600); // For debugging
-  //Wire.begin(); // Start the I2C as master
-  //Wire.setClock(400000);
-
-  // Define pin modes for esc's
-  /*
-  pinMode(bm1_PIN, OUTPUT);
-  pinMode(bm2_PIN, OUTPUT);
-  pinMode(bm3_PIN, OUTPUT);
-  pinMode(bm4_PIN, OUTPUT);
-  */
-  // Define pin modes for mpu
-  // Try this!
-  //pinMode(A4, INPUT_PULLUP);
-  //pinMode(A5, INPUT_PULLUP);
-  //digitalWrite(A4,LOW);
-  //digitalWrite(A5,LOW);
-
-  //Set I2C clock speed to 400kHz
-  //Wire.begin();
-  //Wire.setClock(10000);
+  Wire.begin(); // Start the I2C as master
 
   // Define radio communication
   radio.begin();
@@ -320,26 +302,48 @@ void loop()
 {
   // Step 1: Get MPU data
   getRollPitch();
-  
   gyro_roll_input = (gyro_roll_input * 0.7) + ((GyroX / 65.5) * 0.3); // 65.5 = 1 deg/s
   gyro_pitch_input = (gyro_pitch_input * 0.7) + ((GyroY / 65.5) * 0.3); // 65.5 = 1 deg/s
   gyro_yaw_input = (gyro_yaw_input * 0.7) + ((GyroZ / 65.5) * 0.3); // 65.5 = 1 deg/s
-  /*
-  gyro_roll_input = 0.0;
-  gyro_pitch_input = 0.0;
-  gyro_yaw_input = 0.0;
-  */
 
   // Step 2: Get transmission from RC controller
   getRCtransmission();
+  throttle = map(data.pot1_VAL, 0, 255, 1000, 2000);
+  reciever_roll_input = map(data.j2x_VAL, 0, 255, 1000, 2000);
+  reciever_pitch_input = map(data.j2y_VAL, 0, 255, 2000, 1000);
+  reciever_yaw_input = map(data.j1x_VAL, 0, 255, 1000, 2000);
 
-  // Step 3: Arm esc's -> calibrate gyro -> run
+  // Step 3: Calculate setpoints
+  roll_setpoint = 0;
+  if(reciever_roll_input > 1520) roll_setpoint = reciever_roll_input - 1520;
+  else if(reciever_roll_input < 1480) roll_setpoint = reciever_roll_input - 1480;
+  roll_setpoint -= roll_level_adjust; // Subtract roll angle correction from the standardized receiver roll input value
+  roll_setpoint /= 3; // Divide roll setpoint for the PID roll controller by 3 to get angles in degrees
+
+  pitch_setpoint = 0;
+  if(reciever_pitch_input > 1520) pitch_setpoint = reciever_pitch_input - 1520;
+  else if(reciever_pitch_input < 1480) pitch_setpoint = reciever_pitch_input - 1480;
+  pitch_setpoint -= pitch_level_adjust; // Subtract pitch angle correction from the standardized receiver pitch input value
+  pitch_setpoint /= 3; // Divide pitch setpoint for the PID pitch controller by 3 to get angles in degrees
+
+  yaw_setpoint = 0;
+  if(throttle > 1050) // Do not yaw when turning off the motors.
+  {
+    if(reciever_yaw_input > 1520) yaw_setpoint = reciever_yaw_input - 1520;
+    else if(reciever_yaw_input < 1480) yaw_setpoint = reciever_yaw_input - 1480;
+    yaw_setpoint /= 3; // Divide yaw setpoint for the PID yaw controller by 3 to get angles in degrees
+  }
+
+  // Step 4: Get PID output
+  getPIDoutput();
+
+  // Step 5: Calculate BM inputs (arm esc's -> calibrate gyro -> run)
   if ((esc_armed == false) && (gyro_calibrated == false))
   {
-    bm1 = map(data.pot1_VAL, 0, 255, 1000, 2000);
-    bm2 = bm1;
-    bm3 = bm1;
-    bm4 = bm1;
+    bm1 = throttle;
+    bm2 = throttle;
+    bm3 = throttle;
+    bm4 = throttle;
     if (esc_armed_int < 7500)
     {
       esc_armed_int += 1;
@@ -352,10 +356,10 @@ void loop()
   }
   else if ((esc_armed == true) && (gyro_calibrated == false))
   {
-    bm1 = map(data.pot1_VAL, 0, 255, 1000, 2000);
-    bm2 = bm1;
-    bm3 = bm1;
-    bm4 = bm1;
+    bm1 = throttle;
+    bm2 = throttle;
+    bm3 = throttle;
+    bm4 = throttle;
     if (gyro_cal_int < 2000)
     {
       gyro_x_offset += GyroX;
@@ -374,60 +378,19 @@ void loop()
   }
   else if ((esc_armed == true) && (gyro_calibrated == true))
   {
-    throttle = map(data.pot1_VAL, 0, 255, 1000, 2000);
-    reciever_roll_input = map(data.j2x_VAL, 0, 255, 1000, 2000);
-    reciever_pitch_input = map(data.j2y_VAL, 0, 255, 1000, 2000);
-    reciever_yaw_input = map(data.j1x_VAL, 0, 255, 1000, 2000);
-
-    // Step 3: Calculate setpoints
-    roll_setpoint = 0;
-    if(reciever_roll_input > 1520) roll_setpoint = reciever_roll_input - 1520;
-    else if(reciever_roll_input < 1480) roll_setpoint = reciever_roll_input - 1480;
-    roll_setpoint -= roll_level_adjust; // Subtract roll angle correction from the standardized receiver roll input value
-    roll_setpoint /= 3; // Divide roll setpoint for the PID roll controller by 3 to get angles in degrees
-
-    pitch_setpoint = 0;
-    if(reciever_pitch_input > 1520) pitch_setpoint = reciever_pitch_input - 1520;
-    else if(reciever_pitch_input < 1480) pitch_setpoint = reciever_pitch_input - 1480;
-    pitch_setpoint -= pitch_level_adjust; // Subtract pitch angle correction from the standardized receiver pitch input value
-    pitch_setpoint /= 3; // Divide pitch setpoint for the PID pitch controller by 3 to get angles in degrees
-
-    yaw_setpoint = 0;
-    if(throttle > 1050) // Do not yaw when turning off the motors.
-    {
-      if(reciever_yaw_input > 1520) yaw_setpoint = reciever_yaw_input - 1520;
-      else if(reciever_yaw_input < 1480) yaw_setpoint = reciever_yaw_input - 1480;
-      yaw_setpoint /= 3; // Divide yaw setpoint for the PID yaw controller by 3 to get angles in degrees
-    }
-
-    // Step 4: Get PID output
-    getPIDoutput();
-
     // Step 5: Calculate esc input
     if (throttle > 1800) throttle = 1800; // We need some room to keep full control at full throttle.
     bm1 = throttle - roll_output - pitch_output + yaw_output; // Calculate the pulse for bm1 (front-left - CW)
     bm2 = throttle + roll_output - pitch_output - yaw_output; // Calculate the pulse for bm2 (front-right - CCW)
     bm3 = throttle - roll_output + pitch_output - yaw_output; // Calculate the pulse for bm3 (rear-left - CCW)
     bm4 = throttle + roll_output + pitch_output + yaw_output; // Calculate the pulse for bm4 (rear-right - CW)
-    /*
-    // Can neglect this part of the code when using Servo library
-    // Keep the motors running
-    if (bm1 < 1000) bm1 = 1000;
-    if (bm2 < 1000) bm2 = 1000;
-    if (bm3 < 1000) bm3 = 1000;
-    if (bm4 < 1000) bm4 = 1000;
-    // Limit the bm pulse to 2000us
-    if(bm1 > 2000) bm1 = 2000;
-    if(bm2 > 2000) bm2 = 2000;
-    if(bm3 > 2000) bm3 = 2000;
-    if(bm4 > 2000) bm4 = 2000;
-    */
   }
-
+  
   BM1.writeMicroseconds(bm1);
   BM2.writeMicroseconds(bm2);
   BM3.writeMicroseconds(bm3);
   BM4.writeMicroseconds(bm4);
+  
   /*
   Serial.print(bm1);
   Serial.print(", ");
@@ -435,7 +398,9 @@ void loop()
   Serial.print(", ");
   Serial.print(bm3);
   Serial.print(", ");
-  Serial.println(bm4);
+  Serial.print(bm4);
+  Serial.print(", ");
+  Serial.println(micros() - loop_timer);
   */
   
   while(micros() - loop_timer < 4000); // Wait until the loop_timer reaches 4000us (250Hz) before starting the next loop
