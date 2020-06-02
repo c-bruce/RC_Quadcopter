@@ -206,14 +206,14 @@ void getRollPitch()
   }
 
   // Step 6: Correct for roll_angle_acc and pitch_angle_acc offsets (found manually)
-  roll_angle_acc -= 4.35;
-  pitch_angle_acc -= 2.73;
+  roll_angle_acc -= -0.27;
+  pitch_angle_acc -= 1.70;
 
   // Step 7: Set roll and pitch angle depending on if IMU has already started or not
   if(imu_started) // If the IMU is already started
   {
-    roll_angle = roll_angle * 0.95 + roll_angle_acc * 0.05; // Correct the drift of the gyro roll angle with the accelerometer roll angle
-    pitch_angle = pitch_angle * 0.95 + pitch_angle_acc * 0.05; // Correct the drift of the gyro pitch angle with the accelerometer pitch angle
+    roll_angle = roll_angle * 0.98 + roll_angle_acc * 0.02; // Correct the drift of the gyro roll angle with the accelerometer roll angle
+    pitch_angle = pitch_angle * 0.98 + pitch_angle_acc * 0.02; // Correct the drift of the gyro pitch angle with the accelerometer pitch angle
   }
   else // On first start
   {
@@ -231,9 +231,13 @@ void getPIDoutput() // Get PID output
   gyro_roll_input = (gyro_roll_input * 0.7) + ((GyroX / 65.5) * 0.3); // 65.5 = 1 deg/s
   roll_error = gyro_roll_input - roll_setpoint;
 
-  roll_int_error += roll_Ki * roll_error;
-  if (roll_int_error > roll_lim) roll_int_error = roll_lim; // Deal with integral wind up
-  else if (roll_int_error < -1 * roll_lim) roll_int_error = -1 * roll_lim;
+  if (throttle > 1050)
+  {
+    roll_int_error += roll_Ki * roll_error;
+    if (roll_int_error > 50) roll_int_error = 50; // Deal with integral wind up
+    else if (roll_int_error < -1 * 50) roll_int_error = -1 * 50;
+  }
+  else if (throttle < 1050) roll_int_error = 0;
 
   roll_output = (roll_Kp * roll_error) + roll_int_error + (roll_Kd * (roll_error - roll_previous_error));
   if(roll_output > roll_lim) roll_output = roll_lim; // Limit roll output
@@ -245,9 +249,13 @@ void getPIDoutput() // Get PID output
   gyro_pitch_input = (gyro_pitch_input * 0.7) + ((GyroY / 65.5) * 0.3); // 65.5 = 1 deg/s
   pitch_error = gyro_pitch_input - pitch_setpoint;
 
-  pitch_int_error += pitch_Ki * pitch_error;
-  if (pitch_int_error > pitch_lim) pitch_int_error = pitch_lim; // Deal with integral wind up
-  else if (pitch_int_error < -1 * pitch_lim) pitch_int_error = -1 * pitch_lim;
+  if (throttle > 1050)
+  {
+    pitch_int_error += pitch_Ki * pitch_error;
+    if (pitch_int_error > 50) pitch_int_error = 50; // Deal with integral wind up
+    else if (pitch_int_error < -1 * 50) pitch_int_error = -1 * 50;
+  }
+  else if (throttle < 1050) pitch_int_error = 0;
 
   pitch_output = (pitch_Kp * pitch_error) + pitch_int_error + (pitch_Kd * (pitch_error - pitch_previous_error));
   if(pitch_output > pitch_lim) pitch_output = pitch_lim; // Limit pitch output
@@ -272,7 +280,7 @@ void getPIDoutput() // Get PID output
 
 void setup()
 {
-  //Serial.begin(57600); // For debugging
+  Serial.begin(57600); // For debugging
   Wire.begin(); // Start the I2C as master
 
   // Define radio communication
@@ -390,6 +398,12 @@ void loop()
   BM2.writeMicroseconds(bm2);
   BM3.writeMicroseconds(bm3);
   BM4.writeMicroseconds(bm4);
+  
+  /*
+  Serial.print(roll_angle);
+  Serial.print(", ");
+  Serial.println(pitch_angle);
+  */
   
   /*
   Serial.print(bm1);
