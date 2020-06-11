@@ -21,20 +21,23 @@ float gyro_x_offset, gyro_y_offset, gyro_z_offset; // Gyroscope roll, pitch, yaw
 float AccX, AccY, AccZ, temperature, GyroX, GyroY, GyroZ; // Raw MPU data
 float total_vector_acc;
 float roll_angle_acc, pitch_angle_acc;
+float roll_angle_acc_trim = -0.014;
+float pitch_angle_acc_trim = 2.344;
 float roll_angle, pitch_angle, yaw_angle;
 float roll_level_adjust, pitch_level_adjust;
 
 // Define Quadcopter Inputs
 int throttle;
 int reciever_roll_input, reciever_pitch_input, reciever_yaw_input;
-int tuning_on, tuning_dir, tuning_p, tuning_i, tuning_d;
-int tuning_p_last = 1;
-int tuning_i_last = 1;
-int tuning_d_last = 1;
+int tuning_trimming, tuning_dir, pb1, pb2, pb3, pb4;
+int pb1_last = 1;
+int pb2_last = 1;
+int pb3_last = 1;
+int pb4_last = 1;
 
 // Define PID Controllers
-float roll_Kp = 1.0; // Roll p gain
-float roll_Ki = 0.0; // Roll i gain
+float roll_Kp = 0.7; // Roll p gain
+float roll_Ki = 0.01; // Roll i gain
 float roll_Kd = 0.0; // Roll d gain
 float roll_lim = 400.0; // Roll limit +/-
 float gyro_roll_input, roll_setpoint, roll_error, roll_previous_error, roll_int_error, roll_output; // Input from gyroscope
@@ -173,7 +176,7 @@ void readMPUdata()
   GyroZ = (Wire.read() << 8 | Wire.read());
 }
 
-void getRollPitch()
+void getRollPitch(float roll_angle_acc_trim, float pitch_angle_acc_trim)
 {
   // Step 1: Get accelerometer and gyroscope data
   readMPUdata();
@@ -210,8 +213,10 @@ void getRollPitch()
   }
 
   // Step 6: Correct for roll_angle_acc and pitch_angle_acc offsets (found manually)
-  roll_angle_acc -= -0.014;
-  pitch_angle_acc -= 2.344;
+  //roll_angle_acc -= -0.014;
+  //pitch_angle_acc -= 2.344;
+  roll_angle_acc -= roll_angle_acc_trim;
+  pitch_angle_acc -= pitch_angle_acc_trim;
 
   // Step 7: Set roll and pitch angle depending on if IMU has already started or not
   if(imu_started) // If the IMU is already started
@@ -321,63 +326,85 @@ void loop()
 {
   loop_timer = micros();
   // Step 1: Get MPU data
-  getRollPitch();
+  getRollPitch(roll_angle_acc_trim, pitch_angle_acc_trim);
   gyro_roll_input = (gyro_roll_input * 0.7) + ((GyroX / 65.5) * 0.3); // 65.5 = 1 deg/s
   gyro_pitch_input = (gyro_pitch_input * 0.7) + ((GyroY / 65.5) * 0.3); // 65.5 = 1 deg/s
   gyro_yaw_input = (gyro_yaw_input * 0.7) + ((GyroZ / 65.5) * 0.3); // 65.5 = 1 deg/s
 
   // Step 2: Get transmission from RC controller
   getRCtransmission();
-  throttle = map(data.pot1_VAL, 0, 255, 1000, 2000);
+  //throttle = map(data.pot1_VAL, 0, 255, 1000, 2000);
+  throttle = map(data.j1y_VAL, 127, 255, 1000, 2000);
+  if (throttle < 1000) throttle = 1000;
   reciever_roll_input = map(data.j2x_VAL, 0, 255, 1000, 2000);
   reciever_pitch_input = map(data.j2y_VAL, 0, 255, 2000, 1000);
   reciever_yaw_input = map(data.j1x_VAL, 0, 255, 1000, 2000);
-
-  // Step 2.1: Modify gains
-  tuning_on = data.t1_VAL;
+  tuning_trimming = data.t1_VAL;
   tuning_dir = data.t2_VAL;
-  tuning_p = data.pb1_VAL;
-  tuning_i = data.pb2_VAL;
-  tuning_d = data.pb3_VAL;
-  if (tuning_on == 0) // If tuning is on
+  pb1 = data.pb1_VAL;
+  pb2 = data.pb2_VAL;
+  pb3 = data.pb3_VAL;
+  pb4 = data.pb4_VAL;
+
+  // Step 3: PID tuning/roll and pitch trimming
+  if (tuning_trimming == 0) // If tuning is on
   {
     if (tuning_dir == 0) // If tuning direction is in the positive direction
     {
       // Tuning roll/pitch P gain
-      if (tuning_p != tuning_p_last)
-        if (tuning_p == 0) roll_Kp += 0.1;
-      tuning_p_last = tuning_p;
+      if (pb1 != pb1_last)
+        if (pb1 == 0) roll_Kp += 0.1;
+      pb1_last = pb1;
       // Tuning roll/pitch I gain
-      if (tuning_i != tuning_i_last)
-        if (tuning_i == 0) roll_Ki += 0.01;
-      tuning_i_last = tuning_i;
+      if (pb2 != pb2_last)
+        if (pb2 == 0) roll_Ki += 0.01;
+      pb2_last = pb2;
       // Tuning roll/pitch D gain
-      if (tuning_d != tuning_d_last)
-        if (tuning_d == 0) roll_Kd += 1;
-      tuning_d_last = tuning_d;
+      if (pb3 != pb3_last)
+        if (pb3 == 0) roll_Kd += 1;
+      pb3_last = pb3;
     }
     else if (tuning_dir == 1) // If tuning direction is in the negative direction
     {
       // Tuning roll/pitch P gain
-      if (tuning_p != tuning_p_last)
-        if (tuning_p == 0) roll_Kp -= 0.1;
-      tuning_p_last = tuning_p;
+      if (pb1 != pb1_last)
+        if (pb1 == 0) roll_Kp -= 0.1;
+      pb1_last = pb1;
       // Tuning roll/pitch I gain
-      if (tuning_i != tuning_i_last)
-        if (tuning_i == 0) roll_Ki -= 0.01;
-      tuning_i_last = tuning_i;
+      if (pb2 != pb2_last)
+        if (pb2 == 0) roll_Ki -= 0.01;
+      pb2_last = pb2;
       // Tuning roll/pitch D gain
-      if (tuning_d != tuning_d_last)
-        if (tuning_d == 0) roll_Kd -= 1;
-      tuning_d_last = tuning_d;
+      if (pb3 != pb3_last)
+        if (pb3 == 0) roll_Kd -= 1;
+      pb3_last = pb3;
     }
+  }
+  else if (tuning_trimming == 1) // If trimming is on
+  {
+    // Subtract pitch trim
+    if (pb1 != pb1_last)
+      if (pb1 == 0) pitch_angle_acc_trim -= 0.1;
+    pb1_last = pb1;
+    // Add pitch trim
+    if (pb2 != pb2_last)
+      if (pb2 == 0) pitch_angle_acc_trim += 0.1;
+    pb2_last = pb2;
+    // Subtract roll trim
+    if (pb3 != pb3_last)
+      if (pb3 == 0) roll_angle_acc_trim -= 0.1;
+    pb3_last = pb3;
+    // Add roll trim
+    if (pb4 != pb4_last)
+      if (pb4 == 0) roll_angle_acc_trim += 0.1;
+    pb4_last = pb4;
   }
   // Protect against going negative to avoid unwanted behaviour
   if (roll_Kp < 0) roll_Kp = 0;
   if (roll_Ki < 0) roll_Ki = 0;
   if (roll_Kd < 0) roll_Kd = 0;
 
-  // Step 3: Calculate setpoints
+  // Step 4: Calculate setpoints
   roll_setpoint = 0;
   if(reciever_roll_input > 1520) roll_setpoint = reciever_roll_input - 1520;
   else if(reciever_roll_input < 1480) roll_setpoint = reciever_roll_input - 1480;
@@ -398,10 +425,10 @@ void loop()
     yaw_setpoint /= 3; // Divide yaw setpoint for the PID yaw controller by 3 to get angles in degrees
   }
 
-  // Step 4: Get PID output
+  // Step 5: Get PID output
   getPIDoutput(roll_Kp, roll_Ki, roll_Kd);
 
-  // Step 5: Calculate BM inputs (arm esc's -> calibrate gyro -> run)
+  // Step 6: Calculate BM inputs (arm esc's -> calibrate gyro -> run)
   if ((esc_armed == false) && (gyro_calibrated == false))
   {
     bm1 = throttle;
@@ -442,7 +469,7 @@ void loop()
   }
   else if ((esc_armed == true) && (gyro_calibrated == true))
   {
-    // Step 5: Calculate esc input
+    // Step 7: Calculate esc input
     if (throttle > 1800) throttle = 1800; // We need some room to keep full control at full throttle.
     bm1 = throttle - roll_output - pitch_output + yaw_output; // Calculate the pulse for bm1 (front-left - CW)
     bm2 = throttle + roll_output - pitch_output - yaw_output; // Calculate the pulse for bm2 (front-right - CCW)
@@ -455,11 +482,9 @@ void loop()
   BM3.writeMicroseconds(bm3);
   BM4.writeMicroseconds(bm4);
   
-  /*
-  Serial.print(roll_angle);
+  Serial.print(roll_angle_acc);
   Serial.print(", ");
-  Serial.println(pitch_angle);
-  */
+  Serial.println(pitch_angle_acc);
   /*
   Serial.print(bm1);
   Serial.print(", ");
@@ -470,18 +495,20 @@ void loop()
   Serial.println(bm4);
   */
   /*
-  Serial.println(micros() - loop_timer);
+  Serial.print(throttle);
+  Serial.print(", ");
+  Serial.println(reciever_yaw_input);
   */
   /*
-  Serial.print(tuning_on);
+  Serial.print(tunintrimming);
   Serial.print(", ");
   Serial.print(tuning_dir);
   Serial.print(", ");
-  Serial.print(tuning_p);
+  Serial.print(pb1);
   Serial.print(", ");
-  Serial.print(tuning_i);
+  Serial.print(pb2);
   Serial.print(", ");
-  Serial.print(tuning_d);
+  Serial.print(pb3);
   Serial.print(", ");
   Serial.print(roll_Kp);
   Serial.print(", ");
