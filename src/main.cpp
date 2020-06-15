@@ -21,8 +21,8 @@ float gyro_x_offset, gyro_y_offset, gyro_z_offset; // Gyroscope roll, pitch, yaw
 float AccX, AccY, AccZ, temperature, GyroX, GyroY, GyroZ; // Raw MPU data
 float total_vector_acc;
 float roll_angle_acc, pitch_angle_acc;
-float roll_angle_acc_trim = -1.7;
-float pitch_angle_acc_trim = 0.5;
+float roll_angle_acc_trim = -1.3;
+float pitch_angle_acc_trim = 1.8;
 float roll_angle, pitch_angle, yaw_angle;
 float roll_level_adjust, pitch_level_adjust;
 
