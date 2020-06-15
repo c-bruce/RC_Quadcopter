@@ -21,13 +21,13 @@ float gyro_x_offset, gyro_y_offset, gyro_z_offset; // Gyroscope roll, pitch, yaw
 float AccX, AccY, AccZ, temperature, GyroX, GyroY, GyroZ; // Raw MPU data
 float total_vector_acc;
 float roll_angle_acc, pitch_angle_acc;
-float roll_angle_acc_trim = -0.014;
-float pitch_angle_acc_trim = 2.344;
+float roll_angle_acc_trim = -1.7;
+float pitch_angle_acc_trim = 0.5;
 float roll_angle, pitch_angle, yaw_angle;
 float roll_level_adjust, pitch_level_adjust;
 
 // Define Quadcopter Inputs
-int throttle;
+int throttle, throttle_mod;
 int reciever_roll_input, reciever_pitch_input, reciever_yaw_input;
 int tuning_trimming, tuning_dir, pb1, pb2, pb3, pb4;
 int pb1_last = 1;
@@ -333,8 +333,9 @@ void loop()
 
   // Step 2: Get transmission from RC controller
   getRCtransmission();
-  //throttle = map(data.pot1_VAL, 0, 255, 1000, 2000);
-  throttle = map(data.j1y_VAL, 127, 255, 1000, 2000);
+  throttle = map(data.pot1_VAL, 0, 255, 1000, 2000);
+  throttle_mod = map(data.j1y_VAL, 0, 255, -100, 100);
+  throttle = throttle + throttle_mod;
   if (throttle < 1000) throttle = 1000;
   reciever_roll_input = map(data.j2x_VAL, 0, 255, 1000, 2000);
   reciever_pitch_input = map(data.j2y_VAL, 0, 255, 2000, 1000);
@@ -481,10 +482,11 @@ void loop()
   BM2.writeMicroseconds(bm2);
   BM3.writeMicroseconds(bm3);
   BM4.writeMicroseconds(bm4);
-  
+  /*
   Serial.print(roll_angle_acc);
   Serial.print(", ");
   Serial.println(pitch_angle_acc);
+  */
   /*
   Serial.print(bm1);
   Serial.print(", ");
@@ -494,11 +496,9 @@ void loop()
   Serial.print(", ");
   Serial.println(bm4);
   */
-  /*
   Serial.print(throttle);
   Serial.print(", ");
   Serial.println(reciever_yaw_input);
-  */
   /*
   Serial.print(tunintrimming);
   Serial.print(", ");
