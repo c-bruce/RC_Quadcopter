@@ -246,8 +246,10 @@ void getPIDoutput(float roll_Kp, float roll_Ki, float roll_Kd) // Get PID output
   if (throttle > 1050)
   {
     roll_int_error += roll_Ki * roll_error;
+    /*
     if (roll_int_error > 160) roll_int_error = 160; // Deal with integral wind up
     else if (roll_int_error < -1 * 160) roll_int_error = -1 * 160;
+    */
   }
   else if (throttle < 1050) roll_int_error = 0;
 
@@ -264,8 +266,10 @@ void getPIDoutput(float roll_Kp, float roll_Ki, float roll_Kd) // Get PID output
   if (throttle > 1050)
   {
     pitch_int_error += pitch_Ki * pitch_error;
+    /*
     if (pitch_int_error > 160) pitch_int_error = 160; // Deal with integral wind up
     else if (pitch_int_error < -1 * 160) pitch_int_error = -1 * 160;
+    */
   }
   else if (throttle < 1050) pitch_int_error = 0;
 
@@ -282,8 +286,10 @@ void getPIDoutput(float roll_Kp, float roll_Ki, float roll_Kd) // Get PID output
   if (throttle > 1050)
   {
     yaw_int_error += yaw_Ki * yaw_error;
+    /*
     if (yaw_int_error > 160) yaw_int_error = 160; // Deal with integral wind up
     else if (yaw_int_error < -1 * 160) yaw_int_error = -1 * 160;
+    */
   }
   else if (throttle < 1050) yaw_int_error = 0;
 
@@ -334,7 +340,7 @@ void loop()
   // Step 2: Get transmission from RC controller
   getRCtransmission();
   throttle = map(data.pot1_VAL, 0, 255, 1000, 2000);
-  throttle_mod = map(data.j1y_VAL, 0, 255, -100, 100);
+  throttle_mod = map(data.j1y_VAL, 0, 255, -200, 200);
   throttle = throttle + throttle_mod;
   if (throttle < 1000) throttle = 1000;
   reciever_roll_input = map(data.j2x_VAL, 0, 255, 1000, 2000);
@@ -362,7 +368,7 @@ void loop()
       pb2_last = pb2;
       // Tuning roll/pitch D gain
       if (pb3 != pb3_last)
-        if (pb3 == 0) roll_Kd += 1;
+        if (pb3 == 0) roll_Kd += 0.1;
       pb3_last = pb3;
     }
     else if (tuning_dir == 1) // If tuning direction is in the negative direction
@@ -377,7 +383,7 @@ void loop()
       pb2_last = pb2;
       // Tuning roll/pitch D gain
       if (pb3 != pb3_last)
-        if (pb3 == 0) roll_Kd -= 1;
+        if (pb3 == 0) roll_Kd -= 0.1;
       pb3_last = pb3;
     }
   }
@@ -385,19 +391,19 @@ void loop()
   {
     // Subtract pitch trim
     if (pb1 != pb1_last)
-      if (pb1 == 0) pitch_angle_acc_trim -= 0.1;
+      if (pb1 == 0) pitch_angle_acc_trim -= 0.5;
     pb1_last = pb1;
     // Add pitch trim
     if (pb2 != pb2_last)
-      if (pb2 == 0) pitch_angle_acc_trim += 0.1;
+      if (pb2 == 0) pitch_angle_acc_trim += 0.5;
     pb2_last = pb2;
     // Subtract roll trim
     if (pb3 != pb3_last)
-      if (pb3 == 0) roll_angle_acc_trim -= 0.1;
+      if (pb3 == 0) roll_angle_acc_trim -= 0.5;
     pb3_last = pb3;
     // Add roll trim
     if (pb4 != pb4_last)
-      if (pb4 == 0) roll_angle_acc_trim += 0.1;
+      if (pb4 == 0) roll_angle_acc_trim += 0.5;
     pb4_last = pb4;
   }
   // Protect against going negative to avoid unwanted behaviour
