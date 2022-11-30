@@ -488,11 +488,11 @@ void loop()
   BM2.writeMicroseconds(bm2);
   BM3.writeMicroseconds(bm3);
   BM4.writeMicroseconds(bm4);
-  /*
+  
   Serial.print(roll_angle_acc);
   Serial.print(", ");
   Serial.println(pitch_angle_acc);
-  */
+  
   /*
   Serial.print(bm1);
   Serial.print(", ");
@@ -502,9 +502,11 @@ void loop()
   Serial.print(", ");
   Serial.println(bm4);
   */
+  /*
   Serial.print(throttle);
   Serial.print(", ");
   Serial.println(reciever_yaw_input);
+  */
   /*
   Serial.print(tunintrimming);
   Serial.print(", ");
