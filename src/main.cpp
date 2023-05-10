@@ -24,7 +24,6 @@ float roll_angle_acc, pitch_angle_acc;
 float roll_angle_acc_trim = -1.3;
 float pitch_angle_acc_trim = 1.8;
 float roll_angle, pitch_angle, yaw_angle;
-float roll_level_adjust, pitch_level_adjust;
 
 // Define Quadcopter Inputs
 int throttle, throttle_mod;
@@ -36,17 +35,18 @@ int pb3_last = 1;
 int pb4_last = 1;
 
 // Define PID Controllers
-float roll_Kp = 0.7; // Roll p gain
+// float roll_Kp = 0.7; // Roll p gain
+float roll_Kp = 1.0; // Roll p gain
 float roll_Ki = 0.01; // Roll i gain
 float roll_Kd = 0.0; // Roll d gain
 float roll_lim = 400.0; // Roll limit +/-
-float gyro_roll_input, roll_setpoint, roll_error, roll_previous_error, roll_int_error, roll_output; // Input from gyroscope
+float roll_setpoint, roll_error, roll_previous_error, roll_int_error, roll_output; // Input from gyroscope
 
 float pitch_Kp = roll_Kp; // Pitch p gain
 float pitch_Ki = roll_Ki; // Pitch i gain
 float pitch_Kd = roll_Kd; // Pitch d gain
-float pitch_lim = 400.0; // Pitch limit +/-
-float gyro_pitch_input, pitch_setpoint, pitch_error, pitch_previous_error, pitch_int_error, pitch_output; // Input from gyroscope
+float pitch_lim = roll_lim; // Pitch limit +/-
+float pitch_setpoint, pitch_error, pitch_previous_error, pitch_int_error, pitch_output; // Input from gyroscope
 
 float yaw_Kp = 3.0; // Yaw p gain
 float yaw_Ki = 0.02; // Yaw i gain
@@ -230,8 +230,6 @@ void getRollPitch(float roll_angle_acc_trim, float pitch_angle_acc_trim)
     pitch_angle = pitch_angle_acc;
     imu_started = true; // Set the IMU started flag
   }
-  roll_level_adjust = roll_angle * 15; // Calculate the roll angle correction
-  pitch_level_adjust = pitch_angle * 15; // Calculate the pitch angle correction
 }
 
 void getPIDoutput(float roll_Kp, float roll_Ki, float roll_Kd) // Get PID output
@@ -239,17 +237,15 @@ void getPIDoutput(float roll_Kp, float roll_Ki, float roll_Kd) // Get PID output
   pitch_Kp = roll_Kp;
   pitch_Ki = roll_Ki;
   pitch_Kd = roll_Kd;
+
   // Roll
-  gyro_roll_input = (gyro_roll_input * 0.7) + ((GyroX / 65.5) * 0.3); // 65.5 = 1 deg/s
-  roll_error = gyro_roll_input - roll_setpoint;
+  roll_error = roll_angle - roll_setpoint;
 
   if (throttle > 1050)
   {
     roll_int_error += roll_Ki * roll_error;
-    /*
     if (roll_int_error > 160) roll_int_error = 160; // Deal with integral wind up
     else if (roll_int_error < -1 * 160) roll_int_error = -1 * 160;
-    */
   }
   else if (throttle < 1050) roll_int_error = 0;
 
@@ -260,16 +256,13 @@ void getPIDoutput(float roll_Kp, float roll_Ki, float roll_Kd) // Get PID output
   roll_previous_error = roll_error;
 
   // Pitch
-  gyro_pitch_input = (gyro_pitch_input * 0.7) + ((GyroY / 65.5) * 0.3); // 65.5 = 1 deg/s
-  pitch_error = gyro_pitch_input - pitch_setpoint;
+  pitch_error = pitch_angle - pitch_setpoint;
 
   if (throttle > 1050)
   {
     pitch_int_error += pitch_Ki * pitch_error;
-    /*
     if (pitch_int_error > 160) pitch_int_error = 160; // Deal with integral wind up
     else if (pitch_int_error < -1 * 160) pitch_int_error = -1 * 160;
-    */
   }
   else if (throttle < 1050) pitch_int_error = 0;
 
@@ -286,10 +279,8 @@ void getPIDoutput(float roll_Kp, float roll_Ki, float roll_Kd) // Get PID output
   if (throttle > 1050)
   {
     yaw_int_error += yaw_Ki * yaw_error;
-    /*
     if (yaw_int_error > 160) yaw_int_error = 160; // Deal with integral wind up
     else if (yaw_int_error < -1 * 160) yaw_int_error = -1 * 160;
-    */
   }
   else if (throttle < 1050) yaw_int_error = 0;
 
@@ -333,9 +324,6 @@ void loop()
   loop_timer = micros();
   // Step 1: Get MPU data
   getRollPitch(roll_angle_acc_trim, pitch_angle_acc_trim);
-  gyro_roll_input = (gyro_roll_input * 0.7) + ((GyroX / 65.5) * 0.3); // 65.5 = 1 deg/s
-  gyro_pitch_input = (gyro_pitch_input * 0.7) + ((GyroY / 65.5) * 0.3); // 65.5 = 1 deg/s
-  gyro_yaw_input = (gyro_yaw_input * 0.7) + ((GyroZ / 65.5) * 0.3); // 65.5 = 1 deg/s
 
   // Step 2: Get transmission from RC controller
   getRCtransmission();
@@ -415,21 +403,19 @@ void loop()
   roll_setpoint = 0;
   if(reciever_roll_input > 1520) roll_setpoint = reciever_roll_input - 1520;
   else if(reciever_roll_input < 1480) roll_setpoint = reciever_roll_input - 1480;
-  roll_setpoint -= roll_level_adjust; // Subtract roll angle correction from the standardized receiver roll input value
-  roll_setpoint /= 3; // Divide roll setpoint for the PID roll controller by 3 to get angles in degrees
+  roll_setpoint /= 10; // Divide roll setpoint for the PID roll controller by 10 to get angles in degrees
 
   pitch_setpoint = 0;
   if(reciever_pitch_input > 1520) pitch_setpoint = reciever_pitch_input - 1520;
   else if(reciever_pitch_input < 1480) pitch_setpoint = reciever_pitch_input - 1480;
-  pitch_setpoint -= pitch_level_adjust; // Subtract pitch angle correction from the standardized receiver pitch input value
-  pitch_setpoint /= 3; // Divide pitch setpoint for the PID pitch controller by 3 to get angles in degrees
+  pitch_setpoint /= 10; // Divide pitch setpoint for the PID pitch controller by 10 to get angles in degrees
 
   yaw_setpoint = 0;
   if(throttle > 1050) // Do not yaw when turning off the motors.
   {
     if(reciever_yaw_input > 1520) yaw_setpoint = reciever_yaw_input - 1520;
     else if(reciever_yaw_input < 1480) yaw_setpoint = reciever_yaw_input - 1480;
-    yaw_setpoint /= 3; // Divide yaw setpoint for the PID yaw controller by 3 to get angles in degrees
+    yaw_setpoint /= 10; // Divide yaw setpoint for the PID yaw controller by 3 to get angles in degrees
   }
 
   // Step 5: Get PID output
@@ -488,40 +474,69 @@ void loop()
   BM2.writeMicroseconds(bm2);
   BM3.writeMicroseconds(bm3);
   BM4.writeMicroseconds(bm4);
-  /*
-  Serial.print(roll_angle_acc);
+
+  // Serial.print(pitch_angle_acc);
+  // Serial.print(", ");
+  // Serial.println(pitch_angle);
+
+  // Serial.print(reciever_roll_input);
+  // Serial.print(", ");
+  // Serial.print(reciever_pitch_input);
+  // Serial.print(", ");
+  // Serial.println(reciever_yaw_input);
+
+  Serial.print(roll_angle);
   Serial.print(", ");
-  Serial.println(pitch_angle_acc);
-  */
-  /*
-  Serial.print(bm1);
+  Serial.print(pitch_angle);
   Serial.print(", ");
-  Serial.print(bm2);
+  Serial.print(gyro_yaw_input);
   Serial.print(", ");
-  Serial.print(bm3);
+  Serial.print(roll_setpoint);
   Serial.print(", ");
-  Serial.println(bm4);
-  */
-  Serial.print(throttle);
+  Serial.print(pitch_setpoint);
   Serial.print(", ");
-  Serial.println(reciever_yaw_input);
-  /*
-  Serial.print(tunintrimming);
+  Serial.print(yaw_setpoint);
   Serial.print(", ");
-  Serial.print(tuning_dir);
+  Serial.print(roll_error);
   Serial.print(", ");
-  Serial.print(pb1);
+  Serial.print(pitch_error);
   Serial.print(", ");
-  Serial.print(pb2);
+  Serial.print(yaw_error);
   Serial.print(", ");
-  Serial.print(pb3);
+  Serial.print(roll_output);
   Serial.print(", ");
-  Serial.print(roll_Kp);
+  Serial.print(pitch_output);
   Serial.print(", ");
-  Serial.print(roll_Ki);
-  Serial.print(", ");
-  Serial.println(roll_Kd);
-  */
-  //Serial.println(micros() - loop_timer);
+  Serial.println(yaw_output);
+
+  // Serial.print(bm1);
+  // Serial.print(", ");
+  // Serial.print(bm2);
+  // Serial.print(", ");
+  // Serial.print(bm3);
+  // Serial.print(", ");
+  // Serial.println(bm4);
+
+  // Serial.print(throttle);
+  // Serial.print(", ");
+  // Serial.println(reciever_yaw_input);
+
+  // Serial.print(tuning_trimming);
+  // Serial.print(", ");
+  // Serial.print(tuning_dir);
+  // Serial.print(", ");
+  // Serial.print(pb1);
+  // Serial.print(", ");
+  // Serial.print(pb2);
+  // Serial.print(", ");
+  // Serial.print(pb3);
+  // Serial.print(", ");
+  // Serial.print(roll_Kp);
+  // Serial.print(", ");
+  // Serial.print(roll_Ki);
+  // Serial.print(", ");
+  // Serial.println(roll_Kd);
+
+  // Serial.println(micros() - loop_timer);
   while(micros() - loop_timer < 4000); // Wait until the loop_timer reaches 4000us (250Hz) before starting the next loop
 }
