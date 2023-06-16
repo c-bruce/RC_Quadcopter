@@ -21,8 +21,8 @@ float gyro_x_offset, gyro_y_offset, gyro_z_offset; // Gyroscope roll, pitch, yaw
 float AccX, AccY, AccZ, temperature, GyroX, GyroY, GyroZ; // Raw MPU data
 float total_vector_acc;
 float roll_angle_acc, pitch_angle_acc;
-float roll_angle_acc_trim = 0.13;
-float pitch_angle_acc_trim = 3.73;
+float roll_angle_acc_trim = -0.298;
+float pitch_angle_acc_trim = -1.823;
 float roll_angle, pitch_angle, yaw_angle;
 float roll_level_adjust, pitch_level_adjust;
 
@@ -36,9 +36,12 @@ int pb3_last = 1;
 int pb4_last = 1;
 
 // Define PID Controllers
-float roll_Kp = 2.5; // Roll p gain
-float roll_Ki = 0.01; // Roll i gain
-float roll_Kd = 8.0; // Roll d gain
+// float roll_Kp = 3.0; // Roll p gain
+// float roll_Ki = 0.02; // Roll i gain
+// float roll_Kd = 12.0; // Roll d gain
+float roll_Kp = 0.7; // Roll p gain
+float roll_Ki = 0.0; // Roll i gain
+float roll_Kd = 0.0; // Roll d gain
 float roll_lim = 400.0; // Roll limit +/-
 float gyro_roll_input, roll_setpoint, roll_error, roll_previous_error, roll_int_error, roll_output; // Input from gyroscope
 
@@ -223,6 +226,8 @@ void getRollPitch(float roll_angle_acc_trim, float pitch_angle_acc_trim)
   {
     roll_angle = roll_angle * 0.98 + roll_angle_acc * 0.02; // Correct the drift of the gyro roll angle with the accelerometer roll angle
     pitch_angle = pitch_angle * 0.98 + pitch_angle_acc * 0.02; // Correct the drift of the gyro pitch angle with the accelerometer pitch angle
+    // roll_angle = roll_angle * 0.9996 + roll_angle_acc * 0.0004; // Correct the drift of the gyro roll angle with the accelerometer roll angle
+    // pitch_angle = pitch_angle * 0.9996 + pitch_angle_acc * 0.0004; // Correct the drift of the gyro pitch angle with the accelerometer pitch angle
   }
   else // On first start
   {
@@ -357,7 +362,7 @@ void loop()
       pb1_last = pb1;
       // Tuning roll/pitch I gain
       if (pb2 != pb2_last)
-        if (pb2 == 0) roll_Ki += 0.01;
+        if (pb2 == 0) roll_Ki += 0.001;
       pb2_last = pb2;
       // Tuning roll/pitch D gain
       if (pb3 != pb3_last)
@@ -372,7 +377,7 @@ void loop()
       pb1_last = pb1;
       // Tuning roll/pitch I gain
       if (pb2 != pb2_last)
-        if (pb2 == 0) roll_Ki -= 0.01;
+        if (pb2 == 0) roll_Ki -= 0.001;
       pb2_last = pb2;
       // Tuning roll/pitch D gain
       if (pb3 != pb3_last)
@@ -496,9 +501,9 @@ void loop()
   // Serial.print(", ");
   // Serial.println(reciever_yaw_input);
 
-  // Serial.print(roll_angle);
-  // Serial.print(", ");
-  // Serial.print(pitch_angle);
+  Serial.print(roll_angle);
+  Serial.print(", ");
+  Serial.println(pitch_angle);
   // Serial.print(", ");
   // Serial.print(gyro_yaw_input);
   // Serial.print(", ");
