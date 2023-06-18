@@ -21,8 +21,8 @@ float gyro_x_offset, gyro_y_offset, gyro_z_offset; // Gyroscope roll, pitch, yaw
 float AccX, AccY, AccZ, temperature, GyroX, GyroY, GyroZ; // Raw MPU data
 float total_vector_acc;
 float roll_angle_acc, pitch_angle_acc;
-float roll_angle_acc_trim = -0.298;
-float pitch_angle_acc_trim = -1.823;
+float roll_angle_acc_trim = -0.893;
+float pitch_angle_acc_trim = -1.740;
 float roll_angle, pitch_angle, yaw_angle;
 float roll_level_adjust, pitch_level_adjust;
 
@@ -151,7 +151,7 @@ void setupMPUregisters()
   Wire.write(0x6B); // Send the requested starting register
   Wire.write(0x00); // Set the requested starting register
   Wire.endTransmission(); // End the transmission
-  //Configure the accelerometer (+/- 8g)
+  // Configure the accelerometer (+/- 8g)
   Wire.beginTransmission(mpu_address); // Start communicating with the MPU-6050
   Wire.write(0x1C); // Send the requested starting register
   Wire.write(0x10); // Set the requested starting register
@@ -199,8 +199,8 @@ void getRollPitch(float roll_angle_acc_trim, float pitch_angle_acc_trim)
   
   // Step 4: Correct roll and pitch for IMU yawing
   // 0.000001066 = 0.0000611 * (PI / 180) -> sin function uses radians
-  roll_angle -= pitch_angle * sin(GyroZ * 0.000001066); // If IMU has yawed transfer the pitch angle to the roll angel
-  pitch_angle += roll_angle * sin(GyroZ * 0.000001066); // If IMU has yawed transfer the roll angle to the pitch angel
+  roll_angle += pitch_angle * sin(GyroZ * 0.000001066); // If IMU has yawed transfer the pitch angle to the roll angel
+  pitch_angle -= roll_angle * sin(GyroZ * 0.000001066); // If IMU has yawed transfer the roll angle to the pitch angel
   
   // Step 5: Accelerometer angle calculation
   // 57.296 = 180 / PI -> asin function uses radians
@@ -216,18 +216,16 @@ void getRollPitch(float roll_angle_acc_trim, float pitch_angle_acc_trim)
   }
 
   // Step 6: Correct for roll_angle_acc and pitch_angle_acc offsets (found manually)
-  //roll_angle_acc -= -0.014;
-  //pitch_angle_acc -= 2.344;
   roll_angle_acc -= roll_angle_acc_trim;
   pitch_angle_acc -= pitch_angle_acc_trim;
 
   // Step 7: Set roll and pitch angle depending on if IMU has already started or not
-  if(imu_started) // If the IMU is already started
+  if(imu_started && gyro_calibrated) // If the IMU is started and gyro is calibrated
   {
-    roll_angle = roll_angle * 0.98 + roll_angle_acc * 0.02; // Correct the drift of the gyro roll angle with the accelerometer roll angle
-    pitch_angle = pitch_angle * 0.98 + pitch_angle_acc * 0.02; // Correct the drift of the gyro pitch angle with the accelerometer pitch angle
-    // roll_angle = roll_angle * 0.9996 + roll_angle_acc * 0.0004; // Correct the drift of the gyro roll angle with the accelerometer roll angle
-    // pitch_angle = pitch_angle * 0.9996 + pitch_angle_acc * 0.0004; // Correct the drift of the gyro pitch angle with the accelerometer pitch angle
+    // roll_angle = roll_angle * 0.98 + roll_angle_acc * 0.02; // Correct the drift of the gyro roll angle with the accelerometer roll angle
+    // pitch_angle = pitch_angle * 0.98 + pitch_angle_acc * 0.02; // Correct the drift of the gyro pitch angle with the accelerometer pitch angle
+    roll_angle = roll_angle * 0.9996 + roll_angle_acc * 0.0004; // Correct the drift of the gyro roll angle with the accelerometer roll angle
+    pitch_angle = pitch_angle * 0.9996 + pitch_angle_acc * 0.0004; // Correct the drift of the gyro pitch angle with the accelerometer pitch angle
   }
   else // On first start
   {
@@ -247,7 +245,6 @@ void getPIDoutput(float roll_Kp, float roll_Ki, float roll_Kd) // Get PID output
   pitch_Kd = roll_Kd;
 
   // Roll
-  gyro_roll_input = (gyro_roll_input * 0.7) + ((GyroX / 65.5) * 0.3); // 65.5 = 1 deg/s
   roll_error = gyro_roll_input - roll_setpoint;
 
   if (throttle > 1050)
@@ -265,7 +262,6 @@ void getPIDoutput(float roll_Kp, float roll_Ki, float roll_Kd) // Get PID output
   roll_previous_error = roll_error;
 
   // Pitch
-  gyro_pitch_input = (gyro_pitch_input * 0.7) + ((GyroY / 65.5) * 0.3); // 65.5 = 1 deg/s
   pitch_error = gyro_pitch_input - pitch_setpoint;
 
   if (throttle > 1050)
@@ -283,7 +279,6 @@ void getPIDoutput(float roll_Kp, float roll_Ki, float roll_Kd) // Get PID output
   pitch_previous_error = pitch_error;
 
   // Yaw
-  gyro_yaw_input = (gyro_yaw_input * 0.7) + ((GyroZ / 65.5) * 0.3); // 65.5 = 1 deg/s
   yaw_error = gyro_yaw_input - yaw_setpoint;
 
   if (throttle > 1050)
@@ -334,6 +329,10 @@ void loop()
   loop_timer = micros();
   // Step 1: Get MPU data
   getRollPitch(roll_angle_acc_trim, pitch_angle_acc_trim);
+
+  gyro_roll_input = (gyro_roll_input * 0.7) + ((GyroX / 65.5) * 0.3); // 65.5 = 1 deg/s
+  gyro_pitch_input = (gyro_pitch_input * 0.7) + ((GyroY / 65.5) * 0.3); // 65.5 = 1 deg/s
+  gyro_yaw_input = (gyro_yaw_input * 0.7) + ((GyroZ / 65.5) * 0.3); // 65.5 = 1 deg/s
 
   // Step 2: Get transmission from RC controller
   getRCtransmission();
@@ -491,6 +490,16 @@ void loop()
   BM3.writeMicroseconds(bm3);
   BM4.writeMicroseconds(bm4);
 
+  // Serial.print(esc_armed);
+  // Serial.print(", ");
+  // Serial.print(gyro_calibrated);
+  // Serial.print(", ");
+  // Serial.print(gyro_x_offset);
+  // Serial.print(", ");
+  // Serial.print(gyro_y_offset);
+  // Serial.print(", ");
+  // Serial.println(gyro_z_offset);
+
   // Serial.print(roll_angle_acc);
   // Serial.print(", ");
   // Serial.println(pitch_angle_acc);
@@ -501,9 +510,13 @@ void loop()
   // Serial.print(", ");
   // Serial.println(reciever_yaw_input);
 
-  Serial.print(roll_angle);
-  Serial.print(", ");
-  Serial.println(pitch_angle);
+  // Serial.print(roll_angle_acc);
+  // Serial.print(", ");
+  // Serial.print(pitch_angle_acc);
+  // Serial.print(", ");
+  // Serial.print(roll_angle);
+  // Serial.print(", ");
+  // Serial.println(pitch_angle);
   // Serial.print(", ");
   // Serial.print(gyro_yaw_input);
   // Serial.print(", ");
